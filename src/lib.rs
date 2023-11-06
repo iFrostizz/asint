@@ -1,5 +1,8 @@
 use num_traits::ops::overflowing::OverflowingAdd;
-use std::{cmp::Ordering, ops::Add};
+use std::{
+    cmp::Ordering,
+    ops::{Add, BitAnd, Mul, Shl, Shr, Sub},
+};
 
 /// A dynamically allocated integer. The inner byte representation is in little-endian format
 #[derive(Clone, Debug)]
@@ -26,6 +29,14 @@ impl DynUint {
 
     fn capacity(&self) -> usize {
         self.inner.capacity()
+    }
+
+    fn get_ls<'a>(lhs: &'a DynUint, rhs: &'a DynUint) -> (&'a DynUint, &'a DynUint) {
+        if lhs.len() > rhs.len() {
+            (lhs, rhs)
+        } else {
+            (rhs, lhs)
+        }
     }
 
     fn get_last_nzero(&self) -> Option<(usize, &u8)> {
@@ -96,12 +107,7 @@ impl Add for DynUint {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        // println!("{:?} {:?}", &self, &rhs);
-        let (long, short) = if self.len() > rhs.len() {
-            (self, rhs)
-        } else {
-            (rhs, self)
-        };
+        let (long, short) = Self::get_ls(&self, &rhs);
 
         let mut ret = Vec::with_capacity(long.len() + 1); // in case of overflow. TODO be smarter about it !
         let mut carry = false;
@@ -125,11 +131,105 @@ impl Add for DynUint {
     }
 }
 
+impl Sub for DynUint {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let (long, short) = Self::get_ls(&self, &rhs);
+
+        // let mut ret = Vec::with_capacity(long.len() + 1); // in case of overflow. TODO be smarter about it !
+        // let mut carry = false;
+
+        if rhs > self {
+            unimplemented!();
+        } else {
+            todo!()
+        }
+    }
+}
+
+// TODO ye
+// impl AddAssign for DynUint {
+//     fn add_assign(&mut self, rhs: Self) {
+//         self = self + rhs;
+//     }
+// }
+
 impl OverflowingAdd for DynUint {
     fn overflowing_add(&self, rhs: &Self) -> (Self, bool) {
         todo!();
         // let overflow_byte = max(self.len(), rhs.len());
         // (self.clone(), false)
+    }
+}
+
+impl BitAnd for DynUint {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        let (long, short) = Self::get_ls(&self, &rhs);
+        Self {
+            inner: self
+                .inner
+                .iter()
+                .enumerate()
+                .map(|(i, lb)| {
+                    let rb = short.inner.get(i).unwrap_or(&0);
+                    lb & rb
+                })
+                .collect(),
+        }
+    }
+}
+
+// TODO yee
+// impl ShlAssign for DynUint {
+//     fn shl_assign(&mut self, rhs: Self) {
+
+//     }
+// }
+
+impl Shl for DynUint {
+    type Output = Self;
+
+    fn shl(self, rhs: Self) -> Self::Output {
+        if rhs == false.into() {
+            self
+        } else {
+            // let rhand = rhs - 1;
+            // rhs
+            todo!()
+        }
+    }
+}
+
+impl Shr for DynUint {
+    type Output = Self;
+
+    fn shr(self, rhs: Self) -> Self::Output {
+        if rhs == false.into() {
+            self
+        } else {
+            todo!()
+        }
+    }
+}
+
+impl Mul for DynUint {
+    type Output = Self;
+
+    fn mul(mut self, mut rhs: Self) -> Self::Output {
+        let mut res = DynUint::from(0u8); // TODO with_capacity !
+        let slf = while rhs != 0u8.into() {
+            if rhs & 1u8.into() == 1u8.into() {
+                // res += self;
+                res = res + self;
+            }
+            // self <<= 1;
+            self = self << 1u8.into();
+            rhs = rhs >> 1u8.into();
+        };
+        res
     }
 }
 
@@ -150,10 +250,6 @@ impl PartialOrd for DynUint {
             Some(Ordering::Equal)
         }
     }
-}
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
 }
 
 #[cfg(test)]
@@ -205,5 +301,9 @@ mod tests {
         let res = byte.clone() + one.clone();
         assert_eq!(res, obyte);
         assert_eq!(res.len(), 2);
+
+        let two = DynUint::from(2u8);
+        let otwenhei = DynUint::from(128u8);
+        // TODO two.pow(otwenhei)
     }
 }
