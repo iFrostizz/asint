@@ -298,30 +298,30 @@ mod tests {
 
     #[test]
     fn add() {
-        let zero = DynUint::from(0usize);
+        let zero = DynUint::from(0u8);
         assert_eq!(zero.clone() + zero.clone(), zero.clone());
 
-        let one = DynUint::from(1usize);
+        let one = DynUint::from(1u8);
         assert_eq!(zero.clone() + one.clone(), one.clone());
 
-        let two = DynUint::from(2usize);
+        let two = DynUint::from(2u8);
         assert_eq!(one.clone() + one.clone(), two.clone());
 
-        let nib = DynUint::from(128usize);
+        let nib = DynUint::from(128u8);
         let obyte = DynUint::from(256usize);
         assert_eq!(nib.clone() + nib.clone(), obyte.clone());
     }
 
     #[test]
     fn sub() {
-        let zero = DynUint::from(0usize);
+        let zero = DynUint::from(0u8);
         assert_eq!(zero.clone() - zero.clone(), zero.clone());
 
-        let one = DynUint::from(1usize);
+        let one = DynUint::from(1u8);
         assert_eq!(one.clone() - zero.clone(), one.clone());
         assert_eq!(one.clone() - one.clone(), zero.clone());
 
-        let two = DynUint::from(2usize);
+        let two = DynUint::from(2u8);
         assert_eq!(two.clone() - one.clone(), one.clone());
     }
 
