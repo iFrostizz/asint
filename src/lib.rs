@@ -58,7 +58,7 @@ impl DynUint {
 
     fn removed_trailing(&mut self) -> &Self {
         if let Some((i, _)) = self.get_last_nzero() {
-            self.inner.drain(i..);
+            self.inner.drain((i + 1)..);
         } else {
             self.inner.clear();
         };
@@ -217,7 +217,7 @@ impl Shl for DynUint {
         } else {
             // let rhand = rhs - 1;
             // rhs
-            todo!()
+            todo!();
         }
     }
 }
@@ -297,6 +297,22 @@ mod tests {
     }
 
     #[test]
+    fn eq() {
+        let zero1 = DynUint::from(false);
+        let zero2 = DynUint::from(0u8);
+        assert_eq!(zero1, zero2);
+
+        let one1 = DynUint::from(true);
+        let one2 = DynUint::from(1u8);
+        assert_eq!(one1, one2);
+
+        assert_ne!(one1, zero1);
+        assert_ne!(one2, zero1);
+        assert_ne!(one1, zero2);
+        assert_ne!(one2, zero2);
+    }
+
+    #[test]
     fn add() {
         let zero = DynUint::from(0u8);
         assert_eq!(zero.clone() + zero.clone(), zero.clone());
@@ -331,6 +347,22 @@ mod tests {
         // TODO signed
         // let mone = DynUint::from(-1);
         // assert_eq!(zero.clone() - one.clone(), mone.clone());
+    }
+
+    #[test]
+    fn shl() {
+        let zero = DynUint::from(0u8);
+        assert_eq!(zero.clone() << zero.clone(), zero.clone());
+
+        let one = DynUint::from(1u8);
+        assert_eq!(one.clone() << zero.clone(), one.clone());
+
+        let two = DynUint::from(2u8);
+        assert_eq!(one.clone() << one.clone(), two.clone());
+
+        let eight = DynUint::from(8u8);
+        let byte = DynUint::from(255u8);
+        assert_eq!((one.clone() << eight.clone()) - one.clone(), byte);
     }
 
     #[test]
