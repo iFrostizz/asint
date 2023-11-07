@@ -141,17 +141,29 @@ impl Add for DynUint {
 impl Sub for DynUint {
     type Output = Self;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        let (long, short) = Self::get_ls(&self, &rhs);
-
-        // let mut ret = Vec::with_capacity(long.len() + 1); // in case of overflow. TODO be smarter about it !
-        // let mut carry = false;
-
+    fn sub(mut self, rhs: Self) -> Self::Output {
         if rhs > self {
-            unimplemented!();
-        } else {
-            todo!()
+            todo!("signed support not done yet");
         }
+
+        let mut carry = false;
+        for (i, lby) in self.inner.iter_mut().enumerate() {
+            let rby = rhs.inner.get(i).unwrap_or(&0);
+            let mut aby = *lby as u16 - *rby as u16 - carry as u16;
+            if aby >= u8::max_value().into() {
+                carry = true;
+                aby -= u8::max_value() as u16 + 1;
+            } else {
+                carry = false;
+            }
+
+            *lby = aby as u8;
+        }
+        if carry {
+            self.inner.push(1);
+        }
+
+        self
     }
 }
 
