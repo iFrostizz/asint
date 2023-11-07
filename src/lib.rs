@@ -39,6 +39,14 @@ impl DynUint {
         }
     }
 
+    fn get_ls_owned(lhs: DynUint, rhs: DynUint) -> (DynUint, DynUint) {
+        if lhs.len() > rhs.len() {
+            (lhs, rhs)
+        } else {
+            (rhs, lhs)
+        }
+    }
+
     fn get_last_nzero(&self) -> Option<(usize, &u8)> {
         self.inner.iter().enumerate().rfind(|(_, v)| v > &&0)
     }
@@ -107,11 +115,10 @@ impl Add for DynUint {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        let (long, short) = Self::get_ls(&self, &rhs);
+        let (mut long, short) = Self::get_ls_owned(self, rhs);
 
-        let mut ret = Vec::with_capacity(long.len() + 1); // in case of overflow. TODO be smarter about it !
         let mut carry = false;
-        for (i, lby) in long.inner.iter().enumerate() {
+        for (i, lby) in long.inner.iter_mut().enumerate() {
             let sby = short.inner.get(i).unwrap_or(&0);
             let mut aby = *lby as u16 + *sby as u16 + carry as u16;
             if aby >= u8::max_value().into() {
@@ -121,13 +128,13 @@ impl Add for DynUint {
                 carry = false;
             }
 
-            ret.push(aby as u8);
+            *lby = aby as u8;
         }
         if carry {
-            ret.push(1);
+            long.inner.push(1);
         }
 
-        Self { inner: ret }
+        long
     }
 }
 
@@ -215,23 +222,23 @@ impl Shr for DynUint {
     }
 }
 
-impl Mul for DynUint {
-    type Output = Self;
+// impl Mul for DynUint {
+//     type Output = Self;
 
-    fn mul(mut self, mut rhs: Self) -> Self::Output {
-        let mut res = DynUint::from(0u8); // TODO with_capacity !
-        let slf = while rhs != 0u8.into() {
-            if rhs & 1u8.into() == 1u8.into() {
-                // res += self;
-                res = res + self;
-            }
-            // self <<= 1;
-            self = self << 1u8.into();
-            rhs = rhs >> 1u8.into();
-        };
-        res
-    }
-}
+//     fn mul(mut self, mut rhs: Self) -> Self::Output {
+//         let mut res = DynUint::from(0u8); // TODO with_capacity !
+//         let slf = while rhs != 0u8.into() {
+//             if rhs & 1u8.into() == 1u8.into() {
+//                 // res += self;
+//                 res = res + self;
+//             }
+//             // self <<= 1;
+//             self = self << 1u8.into();
+//             rhs = rhs >> 1u8.into();
+//         };
+//         res
+//     }
+// }
 
 impl PartialEq for DynUint {
     fn eq(&self, other: &Self) -> bool {
@@ -291,6 +298,27 @@ mod tests {
         let nib = DynUint::from(128usize);
         let obyte = DynUint::from(256usize);
         assert_eq!(nib.clone() + nib.clone(), obyte.clone());
+    }
+
+    #[test]
+    fn sub() {
+        let zero = DynUint::from(0usize);
+        assert_eq!(zero.clone() - zero.clone(), zero.clone());
+
+        let one = DynUint::from(1usize);
+        assert_eq!(one.clone() - zero.clone(), one.clone());
+        assert_eq!(one.clone() - one.clone(), zero.clone());
+
+        let two = DynUint::from(2usize);
+        assert_eq!(two.clone() - one.clone(), one.clone());
+    }
+
+    #[ignore = "signed not supported ~yet"]
+    #[test]
+    fn sub_signed() {
+        // TODO signed
+        // let mone = DynUint::from(-1);
+        // assert_eq!(zero.clone() - one.clone(), mone.clone());
     }
 
     #[test]
