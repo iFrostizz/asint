@@ -55,6 +55,11 @@ impl DynUint {
         self.inner.iter().enumerate().rfind(|(_, v)| v > &&0)
     }
 
+    // TODO !
+    // fn signextend(&mut self) {
+    //      !*self.signed;
+    // }
+
     /// return the latest non-zero byte
     fn last_nzero(&self) -> (usize, &u8) {
         self.get_last_nzero().unwrap_or((0, &0))
@@ -133,9 +138,9 @@ impl Add for DynUint {
         for (i, lby) in long.inner.iter_mut().enumerate() {
             let sby = short.inner.get(i).unwrap_or(&0);
             let mut aby = *lby as u16 + *sby as u16 + carry as u16;
-            if aby >= u8::max_value().into() {
+            if aby > u8::max_value().into() {
                 carry = true;
-                aby -= u8::max_value() as u16 + 1;
+                aby -= 256;
             } else {
                 carry = false;
             }
@@ -316,23 +321,43 @@ impl Shr for DynUint {
     }
 }
 
-// impl Mul for DynUint {
-//     type Output = Self;
+impl Mul for DynUint {
+    type Output = Self;
 
-//     fn mul(mut self, mut rhs: Self) -> Self::Output {
-//         let mut res = DynUint::from(0u8); // TODO with_capacity !
-//         let slf = while rhs != 0u8.into() {
-//             if rhs & 1u8.into() == 1u8.into() {
-//                 // res += self;
-//                 res = res + self;
-//             }
-//             // self <<= 1;
-//             self = self << 1u8.into();
-//             rhs = rhs >> 1u8.into();
-//         };
-//         res
-//     }
-// }
+    fn mul(self, rhs: Self) -> Self::Output {
+        if self == Self::ZERO || rhs == Self::ZERO {
+            Self::ZERO
+        } else if self == DynUint::from(true) {
+            rhs
+        } else if rhs == DynUint::from(true) {
+            self
+        } else {
+            let (long, mut short) = Self::get_ls_owned(self, rhs);
+            let mut res = DynUint::from(0u8);
+            // let diff = long.len() - short.len();
+            // for (i, lb) in long.inner.iter().rev().enumerate() {
+            // let sb = short.inner.get(i - diff).unwrap_or(&0);
+            // let sb = short.inner.get(i).unwrap_or(&0);
+            // let mulb = DynUint::from(lb * sb) >> DynUint::from(i * 8);
+            // dbg!(lb * sb, &mulb);
+            // let mulb = if
+            // res = res + mulb;
+            // }
+
+            let mut count = DynUint::ZERO;
+            while short != DynUint::ZERO {
+                if short.inner.first().unwrap() & 1 == 1 {
+                    let mulb = long.clone() >> count.clone();
+                    res = res + mulb;
+                }
+                short = short << DynUint::from(true);
+                count = count + DynUint::from(true);
+            }
+
+            res
+        }
+    }
+}
 
 impl PartialEq for DynUint {
     fn eq(&self, other: &Self) -> bool {
@@ -407,6 +432,11 @@ mod tests {
         let nib = DynUint::from(128);
         let obyte = DynUint::from(256usize);
         assert_eq!(nib.clone() + nib.clone(), obyte.clone());
+
+        assert_eq!(
+            DynUint::from(254u8) + DynUint::from(1u8),
+            DynUint::from(255u8)
+        );
     }
 
     #[test]
@@ -503,5 +533,13 @@ mod tests {
         let two = DynUint::from(2u8);
         let otwenhei = DynUint::from(128u8);
         // TODO two.pow(otwenhei)
+    }
+
+    #[test]
+    fn mul() {
+        assert_eq!(DynUint::ZERO * DynUint::from(100), DynUint::ZERO);
+        assert_eq!(DynUint::from(true) * DynUint::from(100), DynUint::from(100));
+        assert_eq!(DynUint::from(2u8) * DynUint::from(2u8), DynUint::from(4u8));
+        assert_eq!(DynUint::from(69) * DynUint::from(420), DynUint::from(28980));
     }
 }
