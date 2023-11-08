@@ -1,13 +1,15 @@
 use num_traits::ops::overflowing::OverflowingAdd;
 use std::{
     cmp::Ordering,
-    ops::{Add, BitAnd, Mul, Shl, Shr, Sub},
+    ops::{Add, BitAnd, Mul, Rem, Shl, Shr, Sub},
 };
 
 /// A dynamically allocated integer. The inner byte representation is in little-endian format
 #[derive(Clone, Debug)]
 pub struct DynUint {
     inner: Vec<u8>,
+    // TODO
+    // signed: bool,
 }
 
 impl DynUint {
@@ -26,6 +28,8 @@ impl DynUint {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub const ZERO: Self = Self { inner: vec![] };
 
     fn capacity(&self) -> usize {
         self.inner.capacity()
@@ -95,6 +99,14 @@ impl From<usize> for DynUint {
     }
 }
 
+impl From<i32> for DynUint {
+    fn from(value: i32) -> Self {
+        Self {
+            inner: value.to_le_bytes().to_vec(),
+        }
+    }
+}
+
 impl From<u8> for DynUint {
     fn from(value: u8) -> Self {
         Self {
@@ -143,16 +155,16 @@ impl Sub for DynUint {
 
     fn sub(mut self, rhs: Self) -> Self::Output {
         if rhs > self {
-            todo!("signed support not done yet");
+            todo!("signed sub support not done yet");
         }
 
         let mut carry = false;
         for (i, lby) in self.inner.iter_mut().enumerate() {
             let rby = rhs.inner.get(i).unwrap_or(&0);
-            let mut aby = *lby as u16 - *rby as u16 - carry as u16;
-            if aby >= u8::max_value().into() {
+            let mut aby = *lby as i16 - *rby as i16 - carry as i16;
+            if aby < 0 {
                 carry = true;
-                aby -= u8::max_value() as u16 + 1;
+                aby += 256;
             } else {
                 carry = false;
             }
@@ -160,6 +172,7 @@ impl Sub for DynUint {
             *lby = aby as u8;
         }
         if carry {
+            // todo!();
             self.inner.push(1);
         }
 
@@ -188,7 +201,7 @@ impl BitAnd for DynUint {
     fn bitand(self, rhs: Self) -> Self::Output {
         let (long, short) = Self::get_ls(&self, &rhs);
         Self {
-            inner: self
+            inner: long
                 .inner
                 .iter()
                 .enumerate()
@@ -208,29 +221,98 @@ impl BitAnd for DynUint {
 //     }
 // }
 
+impl Rem for DynUint {
+    type Output = Self;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        if rhs == Self::ZERO {
+            panic!("panik!");
+        } else if rhs == Self::from(true) {
+            Self::ZERO
+        } else {
+            // TODO only works for unsigned tho
+            self & (rhs - Self::from(true))
+        }
+    }
+}
+
 impl Shl for DynUint {
     type Output = Self;
 
-    fn shl(self, rhs: Self) -> Self::Output {
-        if rhs == false.into() {
-            self
-        } else {
-            // let rhand = rhs - 1;
-            // rhs
-            todo!();
+    fn shl(mut self, rhs: Self) -> Self::Output {
+        if self != Self::ZERO || rhs != Self::ZERO {
+            let mut rem = rhs;
+            let mut shifted = 0usize;
+            while rem >= 8u8.into() {
+                rem = rem - 8u8.into();
+                shifted += 1;
+            }
+            if shifted > 0 {
+                for i in (shifted..self.len()).rev() {
+                    self.inner[i - shifted] = self.inner[i];
+                }
+                for _ in 0..shifted {
+                    self.inner.pop();
+                }
+            }
+            if rem > Self::ZERO {
+                let bit_shift = u8::from_le_bytes([*rem.inner.first().unwrap_or(&0)]);
+                if !self.is_empty() {
+                    let len = self.len();
+                    for i in 0..len {
+                        let b = self.inner.get_mut(i).unwrap();
+                        *b >>= bit_shift;
+                        if i < len - 1 {
+                            let nb = self.inner[i + 1];
+                            let carry = nb << (8 - bit_shift);
+                            self.inner[i] |= carry;
+                        }
+                    }
+                }
+            }
         }
+
+        self
     }
 }
 
 impl Shr for DynUint {
     type Output = Self;
 
-    fn shr(self, rhs: Self) -> Self::Output {
-        if rhs == false.into() {
-            self
-        } else {
-            todo!()
+    fn shr(mut self, rhs: Self) -> Self::Output {
+        if self != Self::ZERO || rhs != Self::ZERO {
+            let mut rem = rhs;
+            let mut pushed = 0usize;
+            while rem >= 8u8.into() {
+                // TODO is binary search better for large numbers ?
+                rem = rem - 8u8.into();
+                self.inner.push(0);
+                pushed += 1;
+            }
+            if pushed > 0 {
+                let old_len = self.len() - pushed;
+                for i in (0..old_len).rev() {
+                    self.inner[i + pushed] = self.inner[i];
+                    self.inner[i] = 0;
+                }
+            }
+            if rem > Self::ZERO {
+                let bit_shift = u8::from_le_bytes([*rem.inner.first().unwrap_or(&0)]);
+                if !self.is_empty() {
+                    let len = self.len();
+                    self.inner.push(0);
+                    for i in (0..len).rev() {
+                        let b = self.inner.get_mut(i).unwrap();
+                        let shifted = *b << bit_shift;
+                        let carry = *b >> (8 - bit_shift);
+                        *b = shifted;
+                        self.inner[i + 1] += carry;
+                    }
+                }
+            }
         }
+
+        self
     }
 }
 
@@ -277,14 +359,14 @@ mod tests {
 
     #[test]
     fn inner_repres() {
-        let zero = DynUint::from(0u8);
+        let zero = DynUint::ZERO;
         assert!(zero.clone().removed_trailing().is_empty());
     }
 
     #[test]
     fn ord() {
-        let zero = DynUint::from(0u8);
-        let one = DynUint::from(1u8);
+        let zero = DynUint::ZERO;
+        let one = DynUint::from(1);
 
         assert_eq!(zero, zero);
         assert_eq!(one, one);
@@ -298,12 +380,12 @@ mod tests {
 
     #[test]
     fn eq() {
-        let zero1 = DynUint::from(false);
-        let zero2 = DynUint::from(0u8);
+        let zero1 = DynUint::ZERO;
+        let zero2 = DynUint::from(0);
         assert_eq!(zero1, zero2);
 
         let one1 = DynUint::from(true);
-        let one2 = DynUint::from(1u8);
+        let one2 = DynUint::from(1);
         assert_eq!(one1, one2);
 
         assert_ne!(one1, zero1);
@@ -314,31 +396,33 @@ mod tests {
 
     #[test]
     fn add() {
-        let zero = DynUint::from(0u8);
-        assert_eq!(zero.clone() + zero.clone(), zero.clone());
+        assert_eq!(DynUint::ZERO + DynUint::ZERO, DynUint::ZERO);
 
-        let one = DynUint::from(1u8);
-        assert_eq!(zero.clone() + one.clone(), one.clone());
+        let one = DynUint::from(1);
+        assert_eq!(DynUint::ZERO + one.clone(), one.clone());
 
-        let two = DynUint::from(2u8);
+        let two = DynUint::from(2);
         assert_eq!(one.clone() + one.clone(), two.clone());
 
-        let nib = DynUint::from(128u8);
+        let nib = DynUint::from(128);
         let obyte = DynUint::from(256usize);
         assert_eq!(nib.clone() + nib.clone(), obyte.clone());
     }
 
     #[test]
     fn sub() {
-        let zero = DynUint::from(0u8);
-        assert_eq!(zero.clone() - zero.clone(), zero.clone());
+        assert_eq!(DynUint::ZERO - DynUint::ZERO, DynUint::ZERO);
 
-        let one = DynUint::from(1u8);
-        assert_eq!(one.clone() - zero.clone(), one.clone());
-        assert_eq!(one.clone() - one.clone(), zero.clone());
+        let one = DynUint::from(1);
+        assert_eq!(one.clone() - DynUint::ZERO, one.clone());
+        assert_eq!(one.clone() - one.clone(), DynUint::ZERO);
 
-        let two = DynUint::from(2u8);
+        let two = DynUint::from(2);
         assert_eq!(two.clone() - one.clone(), one.clone());
+
+        let obyte = DynUint::from(256);
+        let byte = DynUint::from(255);
+        assert_eq!(obyte.clone() - one.clone(), byte.clone());
     }
 
     #[ignore = "signed not supported ~yet"]
@@ -350,19 +434,61 @@ mod tests {
     }
 
     #[test]
+    fn and() {
+        let one = DynUint::from(1);
+        assert_eq!(DynUint::ZERO & one.clone(), DynUint::ZERO);
+
+        let umax = DynUint::from(usize::max_value());
+        assert_eq!(umax.clone() & one.clone(), one.clone());
+    }
+
+    #[ignore = "rem TODO"]
+    #[test]
+    fn rem() {
+        let one = DynUint::from(1);
+        assert_eq!(one.clone() % one.clone(), DynUint::ZERO);
+
+        let two = DynUint::from(2);
+        let five = DynUint::from(5);
+        assert_eq!(five.clone() % two.clone(), one.clone());
+        assert_eq!(two.clone() % five.clone(), two.clone());
+    }
+
+    #[test]
     fn shl() {
-        let zero = DynUint::from(0u8);
-        assert_eq!(zero.clone() << zero.clone(), zero.clone());
+        assert_eq!(DynUint::ZERO << DynUint::ZERO, DynUint::ZERO);
 
-        let one = DynUint::from(1u8);
-        assert_eq!(one.clone() << zero.clone(), one.clone());
+        let one = DynUint::from(1);
+        assert_eq!(one.clone() << DynUint::ZERO, one.clone());
 
-        let two = DynUint::from(2u8);
-        assert_eq!(one.clone() << one.clone(), two.clone());
+        let two = DynUint::from(2);
+        assert_eq!(two.clone() << one.clone(), one.clone());
 
-        let eight = DynUint::from(8u8);
-        let byte = DynUint::from(255u8);
-        assert_eq!((one.clone() << eight.clone()) - one.clone(), byte);
+        let seven = DynUint::from(7);
+        let byte = DynUint::from(255);
+        assert_eq!(byte.clone() << seven.clone(), one.clone());
+
+        assert_eq!(DynUint::from(1234) << 5.into(), 38.into());
+    }
+
+    #[test]
+    fn shr() {
+        assert_eq!(DynUint::ZERO >> DynUint::ZERO, DynUint::ZERO);
+
+        let one = DynUint::from(1);
+        assert_eq!(one.clone() >> DynUint::ZERO, one.clone());
+
+        let two = DynUint::from(2);
+        assert_eq!(one.clone() >> one.clone(), two.clone());
+
+        let eight = DynUint::from(8);
+        let byte = DynUint::from(255);
+        assert_eq!((one.clone() >> eight.clone()) - one.clone(), byte);
+
+        assert_eq!(
+            DynUint::from(25) >> DynUint::from(12),
+            DynUint::from(102400)
+        );
     }
 
     #[test]
